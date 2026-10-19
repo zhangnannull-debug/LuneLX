@@ -31,7 +31,7 @@
 | 5 | **HIGH** | 交付的 APK 里 preload 是旧版，根本没有 search 分支 | APK 资产 | ✅ 已重新构建并验证 |
 | 6 | **HIGH** | 在线歌时长按「秒」写进「毫秒」字段，全部变成 0.2 秒 | `LxRepository.kt` | ✅ 已修 |
 | 7 | **MEDIUM** | `onPrepared` 不是一次性的，会造成「暂停了自己又播」「播完重放」 | `ExoPlayerWrapper.kt` | ✅ 已修 |
-| 8 | LOW | `LxSources.ALL` 漏了咪咕 | `LxModels.kt` | ✅ 已修 |
+| 8 | LOW | `LxSources.ALL` 漏了mg | `LxModels.kt` | ✅ 已修 |
 | 9 | LOW | `gradle.properties` 写死容器 aapt2 路径，桌面构建必失败 | `gradle.properties` | ✅ 已修 |
 | 10 | — | 新增无工具链回归测试 `tools/preload-check.js` | 新增 | ✅ |
 | 11 | **HIGH** | 搜索结果行**没有挂 clickable**，看得见点不动，只能走「更多」菜单 | `LxSearchScreen.kt` | ✅ 已修（真机发现） |
@@ -40,7 +40,7 @@
 | 14 | MEDIUM | 在线未开启时提示「还没有可用的音源脚本」，与实际原因不符 | `LxSearchScreen.kt` | ⬜ 未修（文案） |
 | 15 | **HIGH** | **重开 App 会自动播放上次那首**：`restorePlayback` 无条件 `player.start()`，把 `andPlay=false` 的"恢复但暂停"变成自动播放 | `MusicService.kt` / `ExoPlayerWrapper.kt` | ✅ 已修（真机发现并验证） |
 | 16 | **CRITICAL** | **流代理不跟随跨协议重定向**：Android `HttpURLConnection` 不跟 http→https，而直链第一跳就是 301 到 https → 永远 502 | `LxStreamProxy.kt` | ✅ 已修（真机发现并验证） |
-| 17 | — | **新增内置酷狗搜索**（方案 B 的第一个平台），脚本只需提供 `musicUrl` | `lx/search/LxBuiltinSearch.kt` | ✅ 新增并真机跑通 |
+| 17 | — | **新增内置kg搜索**（方案 B 的第一个平台），脚本只需提供 `musicUrl` | `lx/search/LxBuiltinSearch.kt` | ✅ 新增并真机跑通 |
 
 ---
 
@@ -83,11 +83,11 @@ platform-tools + Gradle 9.7.1（wrapper 自带）+ AGP 9.4.0。
 | 本地播放 | ✅ `MusicService` 正常抽取歌词并出声 |
 | **audioSessionId** | ✅ `32065` / `32177` / `32193`，**全部 > 0**，且 AudioTrack 实际绑定该 session |
 | 脚本加载 | ✅ 2 个脚本，`inited sources=[kg]` / `[kw,kg,tx,wy,mg]` |
-| **能力上报含 search** | ✅ 在线页出现「**酷狗**」chip —— 该 chip 只在 `supportsAction(...,"search")` 为真时渲染 |
+| **能力上报含 search** | ✅ 在线页出现「**kg**」chip —— 该 chip 只在 `supportsAction(...,"search")` 为真时渲染 |
 | **搜索链路** | ✅ 输入关键词 → 出现两条结果，时长显示 **3:45 / 4:10**（同时证明 §6 的毫秒换算正确） |
 | **明文流量** | ✅ 代理 `listening on 127.0.0.1:38987`，ExoPlayer 正常连上并拿到 HTTP 响应，**全程无 CLEARTEXT 报错** |
 | 取流链路 | ✅ `resolved kg/test-001 q=320k` → 代理转发（测试地址是故意写死的死链，故 `ConnectException`，属预期） |
-| 开关持久化 | ✅ 强制停止重启后仍保留「酷狗」chip |
+| 开关持久化 | ✅ 强制停止重启后仍保留「kg」chip |
 | **重开 App 不自动播放** | ✅ 启动后 `state=PAUSED, speed=0.0`，位置 6 秒内冻结在 216898；点播放 → `PLAYING` 且位置推进；再暂停 → `PAUSED` |
 
 **同时确认了审计里预言的串味问题**：几次在线播放后，Resume 页出现「测试歌手 / 13 plays」——
@@ -112,7 +112,7 @@ platform-tools + Gradle 9.7.1（wrapper 自带）+ AGP 9.4.0。
 
 据此补做了两件事：
 
-### (a) 内置酷狗搜索（方案 B，第一个平台）
+### (a) 内置kg搜索（方案 B，第一个平台）
 新增 `lx/search/LxBuiltinSearch.kt`，调 `songsearch.kugou.com/song_search_v2`，
 把结果转成 `LxSong` 后交给**原有的** `LxRepository.search` 流程 —— UI、取流、播放一行都没改。
 `hasSearchableSource()` 现在对「有内置搜索的音源」直接返回 true，不再依赖脚本声明。
@@ -158,11 +158,11 @@ state=PLAYING(3), position=20756 → 29825 (7 秒内推进)
 
 | 平台 | 搜索 | 封面 | 歌词 |
 |---|---|---|---|
-| 网易云 wy | ✅ `cloudsearch/pc`（自带 `al.picUrl`/`dt`） | ✅ `al.picUrl` | ✅ `api/song/lyric`（含翻译 `tlyric`） |
+| wy wy | ✅ `cloudsearch/pc`（自带 `al.picUrl`/`dt`） | ✅ `al.picUrl` | ✅ `api/song/lyric`（含翻译 `tlyric`） |
 | QQ tx | ✅ `client_search_cp` | ✅ `y.gtimg.cn/.../T002R300x300M000{albummid}.jpg` | ✅ `fcg_query_lyric_new.fcg`（需 Referer） |
-| 酷狗 kg | ✅ `song_search_v2` | ✅ `Image`（`{size}` 占位；`AlbumImage` 实测为空） | ✅ 两步 krcs→download，base64 |
-| 酷我 kw | ✅ `search.kuwo.cn/r.s`（**伪 JSON**） | ✅ `web_albumpic_short`（`PICPATH` 实测为空） | ❌ 所有歌词入口均返回 `TP=ERROR REQUEST`/301，已封 |
-| 咪咕 mg | ✅ `search_all.do` | ✅ `imgItems[0].img` | ✅ 搜索结果自带 `lyricUrl`，直接 GET 即纯文本 LRC |
+| kg kg | ✅ `song_search_v2` | ✅ `Image`（`{size}` 占位；`AlbumImage` 实测为空） | ✅ 两步 krcs→download，base64 |
+| kw kw | ✅ `search.kuwo.cn/r.s`（**伪 JSON**） | ✅ `web_albumpic_short`（`PICPATH` 实测为空） | ❌ 所有歌词入口均返回 `TP=ERROR REQUEST`/301，已封 |
+| mg mg | ✅ `search_all.do` | ✅ `imgItems[0].img` | ✅ 搜索结果自带 `lyricUrl`，直接 GET 即纯文本 LRC |
 
 封面 URL 已逐个校验返回 `image/*`（wy/tx/kg/kw/mg 五张全部 200）。
 
@@ -191,9 +191,9 @@ state=PLAYING(3)
    已给歌名 + 两个空状态标题 + 脚本管理页两处补上 `colorScheme.onSurface`。
    验证方式：截图像素分析，标题区域亮像素 13.8%，与已知正常的副标题（14.0%）持平，
    纯背景仅 1.0%。
-2. **音源 chip 行放不下五个音源**：原来是不滚动的 `Row`，第 5 个（咪咕）被裁到屏幕外，
+2. **音源 chip 行放不下五个音源**：原来是不滚动的 `Row`，第 5 个（mg）被裁到屏幕外，
    根本点不到。已改为 `horizontalScroll`。
-3. **`&nbsp;` 未解码**：酷我返回 `晴天&nbsp;(Live)`。已在清洗函数里解码常见 HTML 实体。
+3. **`&nbsp;` 未解码**：kw返回 `晴天&nbsp;(Live)`。已在清洗函数里解码常见 HTML 实体。
 
 ### 仍未验证
 
@@ -224,7 +224,7 @@ state=PLAYING(3)
 
 ```
 搜索框内按钮: 在线  [887,222][986,286]
-切到在线后 → 网易云/QQ音乐/酷狗/酷我 chip 出现
+切到在线后 → wy/tx/kg/kw chip 出现
 输入 qingtian → 30 条结果，行样式与本地一致（"晴天 / 3:22 • 空匪 / 在线"）
 点第一条 → resolved wy/1412022124 → builtin lyric ok → PLAYING(3)
 切回本地 → 输入 burn → 全部/Burning、专辑/Not Going Under、艺术家/Maria Arredondo 正常
@@ -232,7 +232,7 @@ state=PLAYING(3)
 
 ### 顺带修掉的一个老问题
 
-在线结果里出现 `晴天&nbsp;(Live)`：酷我返回的是带 HTML 实体的名字。已在清洗函数里解码
+在线结果里出现 `晴天&nbsp;(Live)`：kw返回的是带 HTML 实体的名字。已在清洗函数里解码
 `&nbsp; &amp; &lt; &gt; &quot; &#39;`。
 
 ---
@@ -283,7 +283,7 @@ content query: _display_name=空匪 - 晴天.mp3, relative_path=Music/Lune/, _si
 
 ---
 
-## 0.7 下载移入「更多」弹窗 + 注入封面歌词 + QQ 音乐置顶（2026-10-19 追加）
+## 0.7 下载移入「更多」弹窗 + 注入封面歌词 + tx置顶（2026-10-19 追加）
 
 ### 1) 下载挪进「更多」弹窗
 
@@ -313,7 +313,7 @@ content query: _display_name=空匪 - 晴天.mp3, relative_path=Music/Lune/, _si
 
 这样即使脱离本 App，其他播放器也能看到封面和歌词。
 
-真机实测（网易云《晴天》）：
+真机实测（wy《晴天》）：
 
 ```
 LxDownload: start 晴天 <- http://127.0.0.1:42929/stream/lx_wy_1412022124_320k
@@ -331,26 +331,26 @@ USLT present: True              (歌词，能读到 "[00:00.000] 作词 : ...")
 TIT2 / TPE1 present: True
 ```
 
-### 3) QQ 音乐置顶
+### 3) tx置顶
 
-`LxSources.ALL` 顺序改为 `tx, wy, kg, kw, mg`，所以 chip 行第一个是「QQ音乐」，
-默认选中源也随之变成 QQ 音乐。真机 dump 确认 chip 顺序：`QQ音乐 → 网易云 → 酷狗 → 酷我 → 咪咕`。
+`LxSources.ALL` 顺序改为 `tx, wy, kg, kw, mg`，所以 chip 行第一个是「tx」，
+默认选中源也随之变成 tx。真机 dump 确认 chip 顺序：`tx → wy → kg → kw → mg`。
 
-> ⚠️ 但实测 **QQ 音乐目前播不了**：脚本对 tx 返回
+> ⚠️ 但实测 **tx目前播不了**：脚本对 tx 返回
 > `https://mcp.nianxinxz.com/share/ceshi/None`（资源 id 是 `None`），代理拿到 404。
 > 这是「裤佬音源」脚本 tx 分支自身的问题（它的 kg / wy 分支都正常），不是本项目的 bug。
-> 想让 QQ 音乐可用，需要脚本作者修 tx 分支，或改回用网易云/酷狗作为默认源。
+> 想让 tx可用，需要脚本作者修 tx 分支，或改回用wy/kg作为默认源。
 
 ---
 
-## 0.8 入口整合：酷狗置顶 / 去掉重复在线入口 / 音源页进设置（2026-10-19 追加）
+## 0.8 入口整合：kg置顶 / 去掉重复在线入口 / 音源页进设置（2026-10-19 追加）
 
-### 1) 酷狗置顶
+### 1) kg置顶
 
-`LxSources.ALL` 改为 `kg, tx, wy, kw, mg`，默认选中源随之变成酷狗。
-真机 dump 确认 chip 顺序：`酷狗 → QQ音乐 → 网易云 → 酷我 → 咪咕`。
+`LxSources.ALL` 改为 `kg, tx, wy, kw, mg`，默认选中源随之变成kg。
+真机 dump 确认 chip 顺序：`kg → tx → wy → kw → mg`。
 
-> 选酷狗做默认是有依据的：在「裤佬音源」上实测 **kg 的搜索→取流→播放→歌词全通**，
+> 选kg做默认是有依据的：在「裤佬音源」上实测 **kg 的搜索→取流→播放→歌词全通**，
 > 而 tx 分支脚本自身返回 `None` 会 404（见 §0.7）。
 
 ### 2) 去掉重复的在线搜索入口
@@ -374,7 +374,7 @@ TIT2 / TPE1 present: True
 ```
 设置 → 通用：音频 | 音源 | 保持屏幕常亮 | 重新扫描音乐库 ...
 点击「音源」 → topResumedActivity = ...LxScriptManagerActivity
-页面内容：在线音源开关 / 从 URL 导入 / 👖裤佬SVIP音源（支持：酷我、酷狗、QQ音乐、网易云、咪咕）
+页面内容：在线音源开关 / 从 URL 导入 / 👖裤佬SVIP音源（支持：kw、kg、tx、wy、mg）
 ```
 
 ---
@@ -594,7 +594,7 @@ UPDATE playback_stats SET id = 'SONG_local:' || substr(id, 6)
         启动无 FATAL、无 Room 校验异常
 ```
 
-**收藏不再串味**：在「在线」搜索里收藏两首不同的酷狗歌：
+**收藏不再串味**：在「在线」搜索里收藏两首不同的kg歌：
 
 ```
 ('lx:kg:6DCE0785AE97F57D02DAAF48578C2E80', 'QingTian (小提琴版)', 'Y2002',              1, meta=575B)
@@ -683,7 +683,7 @@ queueOnlineSongs=[Qing Tian, QingTian (小提琴版)], wasPlaying=false
 
 ```
 ┌ HeaderSurface（与「全部」页动作行同一位置/高度，一行）────────────────┐
-│ [酷狗音乐] [QQ音乐] [网易云音乐] [酷我音乐] [咪咕音乐]（可横向滚动）      │  ← 展开
+│ [kg] [tx] [wy] [kw] [mg]（可横向滚动）      │  ← 展开
 └──────────────────────────────────────────────────────────────────┘
    发现（官方榜单）两列卡片 → 点开榜单 → 歌曲列表（SongItem，与本地行一致）
 ```
@@ -710,7 +710,7 @@ queueOnlineSongs=[Qing Tian, QingTian (小提琴版)], wasPlaying=false
 
 ### 两个踩过的坑（都很隐蔽）
 
-1. **酷狗 CDN 的 https 证书不匹配**：`mobilecdn.kugou.com` 的证书是 `*.cdn.myqcloud.com` 的，
+1. **kg CDN 的 https 证书不匹配**：`mobilecdn.kugou.com` 的证书是 `*.cdn.myqcloud.com` 的，
    走 https 真机直接 `SSLPeerUnverifiedException: Hostname mobilecdn.kugou.com not verified`，
    界面上只表现为"没有取到榜单数据"。改回 `http://`（全局已放行明文）后正常。
 2. **`rank/song` 必须带 `version=8000`**：不带它时接口只回 `total=2` 的"榜内变动"，
@@ -723,17 +723,17 @@ queueOnlineSongs=[Qing Tian, QingTian (小提琴版)], wasPlaying=false
 
 ```
 分区菜单: 概览 / 全部 / 在线音乐 / 播放列表 / 专辑 …
-在线音乐页（酷狗）: 标签行 → TOP500(更新：每天 · 1036 万播放)、国潮音乐榜、民谣榜、纯音乐榜、电音榜、DJ热歌榜…
-点顶栏 ⌃/⌄：展开 → 标签行出现（酷狗/QQ/网易云…），列表下移；
+在线音乐页（kg）: 标签行 → TOP500(更新：每天 · 1036 万播放)、国潮音乐榜、民谣榜、纯音乐榜、电音榜、DJ热歌榜…
+点顶栏 ⌃/⌄：展开 → 标签行出现（kg/QQ/wy…），列表下移；
               收起 → 整行消失，屏幕上只剩榜单列表
 点 TOP500 → 60 首；点第一首 → LxRepository: resolved kg/9092283E… q=320k → 301→302→PLAYING(position 8840)
-QQ音乐 → 巅峰榜·流行指数(795 万播放)；网易云音乐 → 飙升榜(每天更新)
-酷我音乐 / 咪咕音乐 → 「该平台暂未提供可用的发现数据…」+「去搜索」
+tx → 巅峰榜·流行指数(795 万播放)；wy → 飙升榜(每天更新)
+kw / mg → 「该平台暂未提供可用的发现数据…」+「去搜索」
 ```
 
 ### 遗留
 
-- 酷我 / 咪咕 的发现需要平台登录态（本 App 没有账号体系）；要补得先做登录或找可用的匿名代理。
+- kw / mg 的发现需要平台登录态（本 App 没有账号体系）；要补得先做登录或找可用的匿名代理。
 - 榜单只取第一页（60 首）；深翻页没做（接口支持 `page`，需要 UI 上的"加载更多"）。
 - 榜单卡片没做下拉刷新，只有失败时的「重试」。
 
@@ -768,7 +768,7 @@ QQ音乐 → 巅峰榜·流行指数(795 万播放)；网易云音乐 → 飙升
      （在 `setPlayerDataSource` 里记录）在恢复状态时被认领回 `PlaybackManager`，
      避免"服务在放、UI 不知道放的是哪首"。
 
-### 顺手修掉：酷狗榜单歌曲没有封面
+### 顺手修掉：kg榜单歌曲没有封面
 
 `rank/song` 里 `album_cover` / `cover` 恒为 null，真正的封面字段是 `album_sizable_cover`
 （带 `{size}` 占位）。改成优先取它，点进榜单后歌曲行就有封面了。
@@ -779,7 +779,7 @@ QQ音乐 → 巅峰榜·流行指数(795 万播放)；网易云音乐 → 飙升
 安装后冷启动：底部播放胶囊回来（「我不难过 / 孙燕姿」），is_mini_player_minimized=false
 在线音乐 → 播放榜单歌曲：active_category=ONLINE，胶囊在，state=PLAYING
 分区菜单里把默认分区改成「全部」（触发 folders 重算）→ 胶囊仍在、currentSong 未清空、音乐未断
-酷狗 TOP500 歌曲列表：天龙八部之宿敌 / 无奈的思绪 / 我不难过 … 每行都有专辑封面
+kg TOP500 歌曲列表：天龙八部之宿敌 / 无奈的思绪 / 我不难过 … 每行都有专辑封面
 ```
 
 ---
@@ -991,7 +991,7 @@ duration = interval,   // interval 是**秒**（"03:45" → 225）
 ## 8. LOW
 
 - `LxSources.ALL` 漏了 `MIGU`（常量定义了却没进列表）。`availableSources()` /
-  `isSourceAvailable()` 都以它为准，于是咪咕脚本声明了也不显示、`buildSongById("mg")` 返回 null。
+  `isSourceAvailable()` 都以它为准，于是mg脚本声明了也不显示、`buildSongById("mg")` 返回 null。
 - `gradle.properties` 里 `android.aapt2FromMavenOverride=/opt/aapt2shim/aapt2` **生效中**，
   桌面一构建就报一句很难懂的 AAPT2 错误。README 说「桌面可以删掉」，但默认值不该是坏的。已注释掉。
 
