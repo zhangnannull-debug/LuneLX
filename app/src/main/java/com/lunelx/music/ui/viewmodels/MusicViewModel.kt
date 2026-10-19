@@ -1,0 +1,527 @@
+package com.lunelx.music.ui.viewmodels
+
+import android.app.Application
+import android.database.ContentObserver
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.lunelx.music.data.MusicDatabase
+import com.lunelx.music.data.PlaylistSong
+import com.lunelx.music.tools.MusicProvider
+import com.lunelx.music.tools.Song
+import com.lunelx.music.tools.SongUid
+import com.lunelx.music.tools.SettingsManager
+import com.lunelx.music.tools.MetadataManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.collect
+
+class MusicViewModel(application: Application) : AndroidViewModel(application) {
+    private val musicProvider = MusicProvider(application)
+    private val metadataManager = MetadataManager(application)
+
+    var allSongs by mutableStateOf<List<Song>>(emptyList())
+        private set
+
+    val visuallyDeletedIds = androidx.compose.runtime.mutableStateListOf<Long>()
+
+    val filteredSongs: List<Song>
+        get() = allSongs.filter { it.id !in visuallyDeletedIds }
+
+    var isLoading by mutableStateOf(false)
+        private set
+
+    fun loadSongs() {
+        viewModelScope.launch {
+            val cached = withContext(Dispatchers.IO) {
+                musicProvider.getCachedSongs()
+            }
+            if (cached.isNotEmpty() && allSongs.isEmpty()) {
+                allSongs = cached
+            } else if (allSongs.isEmpty()) {
+                isLoading = true
+            }
+            
+            syncSongsInternal()
+            isLoading = false
+        }
+    }
+
+    fun refreshLibrary() {
+        viewModelScope.launch {
+            isLoading = true
+            val refreshed = musicProvider.refreshLibrary()
+            if (refreshed.isNotEmpty()) {
+                allSongs = refreshed
+            }
+            isLoading = false
+        }
+    }
+
+    private suspend fun syncSongsInternal() {
+        val synced = musicProvider.syncSongs()
+        
+        if (synced.isNotEmpty()) {
+            val settingsManager = SettingsManager.getInstance(getApplication())
+            if (settingsManager.isInitialFolderScanPending) {
+                if (!settingsManager.showAllFoldersOnStart) {
+                    val uriStr = settingsManager.musicFolderUri
+                    if (!uriStr.isNullOrBlank()) {
+                        try {
+                            val uri = android.net.Uri.parse(uriStr)
+                            val pathSegment = uri.lastPathSegment?.substringAfterLast(":")
+                            if (!pathSegment.isNullOrBlank()) {
+                                val targetFolder = pathSegment.substringAfterLast("/")
+                                val allowedFolderNames = synced.filter { song ->
+                                    song.path.contains("/$pathSegment/", ignoreCase = true) ||
+                                    song.path.contains("/$targetFolder/", ignoreCase = true)
+                                }.map { it.folderName }.toSet()
+
+                                val allFolderNames = synced.map { it.folderName }.toSet()
+                                val foldersToHide = allFolderNames - allowedFolderNames
+                                settingsManager.hiddenFolders = foldersToHide
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+                settingsManager.isInitialFolderScanPending = false
+            }
+            
+            if (synced != allSongs) {
+                allSongs = synced
+            }
+        } else {
+            // If sync returned empty but we already had songs, don't clear the list.
+            // This prevents the "no songs" bug when permissions or MediaStore fail temporarily.
+            if (allSongs.isEmpty()) {
+                allSongs = emptyList()
+            }
+        }
+    }
+
+    fun updateMetadata(
+        song: Song,
+        title: String,
+        artist: String,
+        album: String,
+        genre: String?,
+        coverUri: android.net.Uri?,
+        onSuccess: () -> Unit
+    ) {
+        viewModelScope.launch {
+            val success = metadataManager.updateSongMetadata(
+                songUid = song.uid,
+                title = title,
+                artist = artist,
+                album = album,
+                genre = genre,
+                coverUri = coverUri?.toString()
+            )
+            if (success) {
+                allSongs = allSongs.map {
+                    if (it.uid == song.uid) it.copy(
+                        title = title,
+                        artist = artist,
+                        album = album,
+                        genre = genre ?: it.genre,
+                        coverUrl = coverUri?.toString() ?: it.coverUrl
+                    ) else it
+                }
+                onSuccess()
+                syncSongsInternal()
+            }
+        }
+    }
+
+    fun restoreOriginalMetadata(song: Song, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            val success = metadataManager.clearMetadataOverride(song.uid)
+            if (success) {
+                syncSongsInternal()
+                onSuccess()
+            }
+        }
+    }
+
+    fun toggleFavorite(song: Song) {
+        viewModelScope.launch {
+            val success = metadataManager.setFavorite(song, !song.isFavorite)
+            if (success) {
+                allSongs = allSongs.map {
+                    if (it.uid == song.uid) it.copy(isFavorite = !song.isFavorite) else it
+                }
+            }
+        }
+    }
+
+    /** 通知栏 / 系统媒体控件里切了收藏后，把内存里的那份同步过来。按 uid 匹配。 */
+    fun syncFavoriteStatusInMemory(songUid: String, isFavorite: Boolean) {
+        allSongs = allSongs.map {
+            if (it.uid == songUid) it.copy(isFavorite = isFavorite) else it
+        }
+    }
+
+    // PLAYLISTS
+    var playlists by mutableStateOf<List<com.lunelx.music.data.Playlist>>(emptyList())
+        private set
+
+    var playlistMappings by mutableStateOf<List<com.lunelx.music.data.PlaylistSong>>(emptyList())
+        private set
+
+    var topSongStats by mutableStateOf<List<com.lunelx.music.data.PlaybackStats>>(emptyList())
+        private set
+    var topPlaylistStats by mutableStateOf<List<com.lunelx.music.data.PlaybackStats>>(emptyList())
+        private set
+    var topArtistStats by mutableStateOf<List<com.lunelx.music.data.PlaybackStats>>(emptyList())
+        private set
+    var topGenreStats by mutableStateOf<List<com.lunelx.music.data.PlaybackStats>>(emptyList())
+        private set
+
+    fun loadPlaylists() {
+        viewModelScope.launch {
+            val (newPlaylists, newMappings) = withContext(Dispatchers.IO) {
+                val db = com.lunelx.music.data.MusicDatabase.getDatabase(getApplication())
+                Pair(db.playlistDao().getAllPlaylists(), db.playlistDao().getAllPlaylistMappings())
+            }
+            playlists = newPlaylists
+            playlistMappings = newMappings
+        }
+    }
+
+    fun createPlaylist(name: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                com.lunelx.music.data.MusicDatabase.getDatabase(getApplication()).playlistDao().insertPlaylist(
+                    com.lunelx.music.data.Playlist(name = name)
+                )
+            }
+            loadPlaylists()
+            notifyPlaylistsChanged()
+        }
+    }
+
+    private fun notifyPlaylistsChanged() {
+        com.lunelx.music.tools.PlaylistBackupManager(getApplication()).triggerAutoSync()
+    }
+
+    private suspend fun awaitLoadPlaylists() {
+        val (newPlaylists, newMappings) = withContext(Dispatchers.IO) {
+            val db = com.lunelx.music.data.MusicDatabase.getDatabase(getApplication())
+            Pair(db.playlistDao().getAllPlaylists(), db.playlistDao().getAllPlaylistMappings())
+        }
+        playlists = newPlaylists
+        playlistMappings = newMappings
+    }
+
+    fun addSongToPlaylist(playlistId: Long, songId: Long, onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val db = MusicDatabase.getDatabase(getApplication())
+                val maxPos = db.playlistDao().getMaxPosition(playlistId) ?: 0
+                db.playlistDao().addSongToPlaylist(
+                    PlaylistSong(playlistId, songId, position = maxPos + 1)
+                )
+            }
+            awaitLoadPlaylists()
+            notifyPlaylistsChanged()
+            onComplete?.invoke()
+        }
+    }
+
+    fun addSongsToPlaylist(playlistId: Long, songIds: List<Long>, onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val db = MusicDatabase.getDatabase(getApplication())
+                val maxPos = db.playlistDao().getMaxPosition(playlistId) ?: 0
+                val playlistSongs = songIds.mapIndexed { index, id ->
+                    PlaylistSong(playlistId, id, position = maxPos + 1 + index)
+                }
+                db.playlistDao().addSongsToPlaylist(playlistSongs)
+            }
+            awaitLoadPlaylists()
+            notifyPlaylistsChanged()
+            onComplete?.invoke()
+        }
+    }
+
+    fun reorderPlaylist(playlistId: Long, fromIndex: Int, toIndex: Int) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val db = MusicDatabase.getDatabase(getApplication())
+                val dao = db.playlistDao()
+                val mappings = dao.getPlaylistSongs(playlistId).toMutableList()
+                if (fromIndex in mappings.indices && toIndex in mappings.indices) {
+                    val moved = mappings.removeAt(fromIndex)
+                    mappings.add(toIndex, moved)
+                    val updatedMappings = mappings.mapIndexed { index, mapping ->
+                        mapping.copy(position = index)
+                    }
+                    dao.updatePlaylistSongs(updatedMappings)
+                }
+            }
+            awaitLoadPlaylists()
+            notifyPlaylistsChanged()
+        }
+    }
+
+    fun savePlaylistOrder(playlistId: Long, orderedSongIds: List<Long>) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val db = MusicDatabase.getDatabase(getApplication())
+                val dao = db.playlistDao()
+                val mappings = dao.getPlaylistSongs(playlistId)
+                val mappingBySongId = mappings.associateBy { it.songId }
+                val updatedMappings = orderedSongIds.mapIndexedNotNull { index, songId ->
+                    mappingBySongId[songId]?.copy(position = index)
+                }
+                if (updatedMappings.isNotEmpty()) {
+                    dao.updatePlaylistSongs(updatedMappings)
+                }
+            }
+            awaitLoadPlaylists()
+            notifyPlaylistsChanged()
+        }
+    }
+
+    fun removeSongsFromPlaylist(playlistId: Long, songIds: List<Long>, onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val db = com.lunelx.music.data.MusicDatabase.getDatabase(getApplication())
+                db.playlistDao().removeSongsFromPlaylist(playlistId, songIds)
+            }
+            awaitLoadPlaylists()
+            notifyPlaylistsChanged()
+            onComplete?.invoke()
+        }
+    }
+
+    fun removeSongFromPlaylist(playlistId: Long, songId: Long, onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                com.lunelx.music.data.MusicDatabase.getDatabase(getApplication()).playlistDao().removeSongFromPlaylist(playlistId, songId)
+            }
+            awaitLoadPlaylists()
+            notifyPlaylistsChanged()
+            onComplete?.invoke()
+        }
+    }
+
+    fun getPlaylistsContainingSong(songId: Long, callback: (List<Long>) -> Unit) {
+        viewModelScope.launch {
+            // This is a bit inefficient but works for now: check all playlists
+            val all = withContext(Dispatchers.IO) {
+                com.lunelx.music.data.MusicDatabase.getDatabase(getApplication()).playlistDao().getAllPlaylists()
+            }
+            val matches = mutableListOf<Long>()
+            for (p in all) {
+                val sIds = withContext(Dispatchers.IO) {
+                    com.lunelx.music.data.MusicDatabase.getDatabase(getApplication()).playlistDao().getSongIdsForPlaylist(p.id)
+                }
+                if (sIds.contains(songId)) {
+                    matches.add(p.id)
+                }
+            }
+            callback(matches)
+        }
+    }
+
+    fun getSongsForPlaylist(playlistId: Long, callback: (List<Song>) -> Unit) {
+        viewModelScope.launch {
+            val ids = withContext(Dispatchers.IO) {
+                com.lunelx.music.data.MusicDatabase.getDatabase(getApplication()).playlistDao().getSongIdsForPlaylist(playlistId)
+            }
+            callback(allSongs.filter { it.id in ids })
+        }
+    }
+
+    fun getSongsForPlaylistSync(playlistId: Long): List<Song> {
+        val songIds = playlistMappings.filter { it.playlistId == playlistId }
+            .sortedWith(compareBy({ it.position }, { it.addedAt }))
+            .map { it.songId }
+        val songMap = allSongs.associateBy { it.id }
+        return songIds.mapNotNull { songMap[it] }
+    }
+
+    fun deletePlaylist(playlist: com.lunelx.music.data.Playlist, onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                com.lunelx.music.data.MusicDatabase.getDatabase(getApplication()).playlistDao().deletePlaylist(playlist)
+            }
+            loadPlaylists()
+            notifyPlaylistsChanged()
+            onComplete?.invoke()
+        }
+    }
+
+    fun renamePlaylist(playlistId: Long, newName: String, onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val db = com.lunelx.music.data.MusicDatabase.getDatabase(getApplication())
+                val playlist = db.playlistDao().getAllPlaylists().find { it.id == playlistId }
+                if (playlist != null) {
+                    db.playlistDao().updatePlaylist(playlist.copy(name = newName))
+                }
+            }
+            loadPlaylists()
+            notifyPlaylistsChanged()
+            onComplete?.invoke()
+        }
+    }
+
+    fun getPlaylistPreviewCovers(playlistId: Long, callback: (List<String?>) -> Unit) {
+        viewModelScope.launch {
+            val ids = withContext(Dispatchers.IO) {
+                com.lunelx.music.data.MusicDatabase.getDatabase(getApplication()).playlistDao().getSongIdsForPlaylist(playlistId)
+            }
+            val covers = allSongs.filter { it.id in ids.take(4) }.map { it.coverUrl ?: it.albumArtUri?.toString() }
+            callback(covers)
+        }
+    }
+
+    fun getPlaylistInfo(playlistId: Long, callback: (Int, Long) -> Unit) {
+        viewModelScope.launch {
+            val ids = withContext(Dispatchers.IO) {
+                com.lunelx.music.data.MusicDatabase.getDatabase(getApplication()).playlistDao().getSongIdsForPlaylist(playlistId)
+            }
+            val playlistSongs = allSongs.filter { it.id in ids }
+            val count = playlistSongs.size
+            val totalDuration = playlistSongs.sumOf { it.duration }
+            callback(count, totalDuration)
+        }
+    }
+
+    private fun observeStats() {
+        viewModelScope.launch {
+            val db = com.lunelx.music.data.MusicDatabase.getDatabase(getApplication())
+            val dao = db.playbackStatsDao()
+            
+            launch {
+                dao.getTopByCountFlow("SONG", 50).collect { topSongStats = it }
+            }
+            launch {
+                dao.getTopByTimeFlow("PLAYLIST", 10).collect { topPlaylistStats = it }
+            }
+            launch {
+                dao.getTopByCountFlow("ARTIST", 50).collect { topArtistStats = it }
+            }
+            launch {
+                dao.getTopByCountFlow("GENRE", 10).collect { topGenreStats = it }
+            }
+        }
+    }
+
+    fun prepareDeleteSong(song: Song) {
+        if (!visuallyDeletedIds.contains(song.id)) {
+            visuallyDeletedIds.add(song.id)
+        }
+    }
+
+    fun undoDeleteSong(song: Song) {
+        visuallyDeletedIds.remove(song.id)
+    }
+
+    fun deleteSongPermanently(songId: Long, songData: String, songUri: android.net.Uri) {
+        val context = getApplication<Application>()
+        val settingsManager = SettingsManager.getInstance(context)
+        viewModelScope.launch {
+            val deleted = withContext(Dispatchers.IO) {
+                try {
+                    var success = false
+
+                    // 1. Try to delete via SAF if we have a folder URI
+                    val folderUriString = settingsManager.musicFolderUri
+                    if (folderUriString != null) {
+                        val folderUri = android.net.Uri.parse(folderUriString)
+                        val tree = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, folderUri)
+                        if (tree != null && tree.canWrite()) {
+                            val fileName = java.io.File(songData).name
+                            val fileInSaf = tree.findFile(fileName)
+                            if (fileInSaf?.delete() == true) success = true
+                        }
+                    }
+
+                    // 2. Delete from MediaStore
+                    val rows = context.contentResolver.delete(songUri, null, null)
+                    if (rows > 0) success = true
+                    
+                    // 3. Fallback: direct file delete
+                    val file = java.io.File(songData)
+                    if (file.exists() && file.delete()) success = true
+                    
+                    // 4. Delete metadata overrides (only if deletion succeeded)
+                    if (success) {
+                        val db = com.lunelx.music.data.MusicDatabase.getDatabase(context)
+                        // 删除只对本地文件有效，key 用 uid（`local:<id>`）
+                        val override = db.songOverrideDao().getOverrideForSong(SongUid.of(songId, null, null))
+                        if (override != null) {
+                            db.songOverrideDao().deleteOverride(override)
+                        }
+                    }
+                    
+                    success
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    false
+                }
+            }
+            
+            if (deleted) {
+                loadSongs()
+            }
+            visuallyDeletedIds.remove(songId)
+        }
+    }
+
+    private var mediaStoreObserver: ContentObserver? = null
+    private var debounceJob: Job? = null
+
+    private fun registerMediaStoreObserver() {
+        val context = getApplication<Application>()
+        val handler = Handler(Looper.getMainLooper())
+        val observer = object : ContentObserver(handler) {
+            override fun onChange(selfChange: Boolean) {
+                onChange(selfChange, null)
+            }
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
+                debounceJob?.cancel()
+                debounceJob = viewModelScope.launch {
+                    delay(2000)
+                    syncSongsInternal()
+                }
+            }
+        }
+        context.contentResolver.registerContentObserver(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            true,
+            observer
+        )
+        mediaStoreObserver = observer
+    }
+
+    init {
+        registerMediaStoreObserver()
+        loadSongs()
+        loadPlaylists()
+        observeStats()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        mediaStoreObserver?.let {
+            getApplication<Application>().contentResolver.unregisterContentObserver(it)
+        }
+    }
+}
+
+

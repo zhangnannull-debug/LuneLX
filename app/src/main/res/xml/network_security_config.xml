@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置。
+
+  ## 为什么需要这个文件
+  LxStreamProxy 在本机 127.0.0.1 上起了一个**明文 HTTP** 服务，ExoPlayer 通过
+  http://127.0.0.1:<port>/stream/<token> 拉流。而 targetSdk >= 28 起，Android
+  默认禁止一切明文流量（cleartextTrafficPermitted=false），回环地址也不例外。
+  不显式放行的话，连接会直接抛：
+
+      java.net.UnknownServiceException:
+      CLEARTEXT communication to 127.0.0.1 not permitted by network security policy
+
+  ## 为什么还要全局放行
+  只放行回环是不够的（真机实测）：音源脚本给出的**直链本身就是 http://**。
+  例如「裤佬音源」对酷狗返回的是：
+
+      http://mcp.nianxinxz.com/share/ceshi/kg.php?id=<hash>
+
+  这属于「脚本返回任意 CDN 地址」的架构——域名事先无法枚举，
+  用 <domain-config> 逐个白名单不可行。实测报错：
+
+      java.io.IOException: Cleartext HTTP traffic to mcp.nianxinxz.com not permitted
+
+  因此这里用 <base-config> 放行全部明文流量。
+
+  ## 安全说明（必须知情）
+  这是一次**明确的降级**：应用将不再强制 HTTPS，理论上更容易被中间人劫持。
+  之所以接受：本应用的核心功能就是回放第三方脚本给出的流地址，而这些地址经常是
+  http；不放行则在线播放整体不可用。请勿在此基础上再处理敏感凭据（登录态、支付等）。
+  若将来所有音源都改用 https，应把下面这行关掉，只保留回环放行。
+-->
+<network-security-config>
+    <!-- 回环：本地流代理，必须放行 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+
+    <!-- 其余域名：脚本返回的 http 直链（国内 CDN 常见），实测必需 -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

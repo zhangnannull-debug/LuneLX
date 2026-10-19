@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- 在线歌曲下载：Android 10+ 走 MediaStore 不需要该权限；9 及以下写公共 Music 目录才需要 -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application
+        android:name=".LuneApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:localeConfig="@xml/locales_config"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Lune">
+
+        <activity
+            android:name=".ui.activities.Lune"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Lune">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
+
+        <activity
+            android:name=".ui.activities.QuickPlayerActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Lune.QuickPlayer"
+            android:taskAffinity="com.lunelx.music.quickplayer"
+            android:launchMode="singleInstance"
+            android:excludeFromRecents="true"
+            android:autoRemoveFromRecents="true"
+            android:documentLaunchMode="never">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/ogg" />
+                <data android:mimeType="application/x-ogg" />
+                <data android:mimeType="application/flac" />
+                <data android:mimeType="application/x-flac" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.mp3" />
+                <data android:pathPattern=".*\\.flac" />
+                <data android:pathPattern=".*\\.wav" />
+                <data android:pathPattern=".*\\.m4a" />
+                <data android:pathPattern=".*\\.ogg" />
+                <data android:pathPattern=".*\\.opus" />
+                <data android:pathPattern=".*\\.aac" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".ui.activities.SettingsActivity"
+            android:exported="false"
+            android:label="@string/settings"
+            android:theme="@style/Theme.Lune" />
+        <activity
+            android:name=".ui.activities.AboutActivity"
+            android:exported="false"
+            android:label="@string/about"
+            android:theme="@style/Theme.Lune" />
+        <activity
+            android:name=".ui.activities.PermissionsActivity"
+            android:exported="false"
+            android:label="@string/permissions"
+            android:theme="@style/Theme.Lune" />
+        <activity
+            android:name=".ui.activities.LyricsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Lune" />
+        <activity
+            android:name=".ui.activities.CustomizationActivity"
+            android:exported="false"
+            android:label="@string/general"
+            android:theme="@style/Theme.Lune" />
+        <activity
+            android:name=".ui.activities.CoverCustomizationActivity"
+            android:exported="false"
+            android:label="@string/cover_player"
+            android:theme="@style/Theme.Lune" />
+        <activity
+            android:name=".ui.activities.ControlsCustomizationActivity"
+            android:exported="false"
+            android:label="@string/controls_player"
+            android:theme="@style/Theme.Lune" />
+        <activity
+            android:name=".ui.activities.GestureCustomizationActivity"
+            android:exported="false"
+            android:label="@string/gesture"
+            android:theme="@style/Theme.Lune" />
+        <activity
+            android:name=".ui.activities.BlurCustomizationActivity"
+            android:exported="false"
+            android:label="@string/blur"
+            android:theme="@style/Theme.Lune" />
+        <activity
+            android:name=".ui.activities.EqualizerActivity"
+            android:exported="false"
+            android:label="@string/eq_title"
+            android:theme="@style/Theme.Lune" />
+        <activity
+            android:name=".ui.activities.AudioSettingsActivity"
+            android:exported="false"
+            android:label="@string/audio_settings"
+            android:theme="@style/Theme.Lune" />
+        <activity
+            android:name=".ui.activities.LxScriptManagerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Lune" />
+        <activity
+            android:name=".ui.activities.WidgetCustomizationActivity"
+            android:exported="false"
+            android:label="@string/widget_customization"
+            android:theme="@style/Theme.Lune" />
+
+        <service
+            android:name=".tools.MusicService"
+            android:enabled="true"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback"
+            android:stopWithTask="false">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".tools.LuneWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.lunelx.music.WIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/lune_widget_info" />
+        </receiver>
+
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="androidx.appcompat.app.AppLocalesMetadataHolderService" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.appcompat.app.AppLocalesMetadataHolderService.OPT_IN"
+                android:value="true" />
+        </service>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.lunelx.music.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/provider_paths" />
+        </provider>
+
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+    </application>
+
+</manifest>

@@ -1,1 +1,42 @@
-# placeholder
+# Gradle
+.gradle/
+build/
+app/build/
+app/release/
+
+# Kotlin
+.kotlin/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Local configuration / secrets
+local.properties
+secrets.properties
+keystore.properties
+*.jks
+*.keystore
+google-services.json
+
+# Build artifacts
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Logs & captures
+*.log
+captures/
+
+# Native build
+.externalNativeBuild/
+.cxx/
+
+# OS
+.DS_Store
+Thumbs.db
+.vscode/
