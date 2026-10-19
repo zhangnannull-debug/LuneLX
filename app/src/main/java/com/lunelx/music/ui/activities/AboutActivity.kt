@@ -105,7 +105,6 @@ fun AboutScreen() {
     val hasBlurBackground = settingsManager.isBlurEnabled && ((isDarkTheme && settingsManager.isBlurDarkMode) || (!isDarkTheme && settingsManager.isBlurLightMode))
 
     val scrollState = rememberScrollState()
-    var showDonateDialog by remember { mutableStateOf(false) }
 
     AppBlurBackdrop(
         hasBlurBackground = hasBlurBackground,
@@ -234,8 +233,8 @@ fun AboutScreen() {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Button(
-                        onClick = { 
-                            runCatching { uriHandler.openUri("https://github.com/MrDemonc/Lune/tree/main") }
+                        onClick = {
+                            runCatching { uriHandler.openUri("https://github.com/zhangnannull-debug/LuneLX") }
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -259,65 +258,6 @@ fun AboutScreen() {
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Button(
-                        onClick = { 
-                            runCatching { uriHandler.openUri("https://mrdemonc.github.io/Lune/") }
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .bounceClick(),
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (hasBlurBackground) (if (isDarkTheme) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.22f)) else MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = if (hasBlurBackground) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_web),
-                            contentDescription = stringResource(R.string.website),
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = stringResource(R.string.website),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    Button(
-                        onClick = { showDonateDialog = true },
-                        modifier = Modifier
-                            .weight(1f)
-                            .bounceClick(),
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (hasBlurBackground) Color.White else MaterialTheme.colorScheme.primary,
-                            contentColor = if (hasBlurBackground) Color.Black else MaterialTheme.colorScheme.onPrimary
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.LocalCafe,
-                            contentDescription = "Donation",
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Donate",
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                if (showDonateDialog) {
-                    DonateDialog(
-                        onDismiss = { showDonateDialog = false },
-                        hasBlurBackground = hasBlurBackground,
-                        isDarkTheme = isDarkTheme
-                    )
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -341,6 +281,26 @@ fun AboutScreen() {
                         color = if (hasBlurBackground) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 本分支（LuneLX）的维护者。上游作者仍保留在上方，GPL 要求保留署名。
+                    Text(
+                        text = "维护者",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (hasBlurBackground) Color.White else MaterialTheme.colorScheme.secondary
+                    )
+                    Text(
+                        text = "zhangnannull-debug",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (hasBlurBackground) Color.White else MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "LuneLX（本仓库）的维护者与发布者",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (hasBlurBackground) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
                     Spacer(modifier = Modifier.height(24.dp))
 
                     // Credits
@@ -350,7 +310,7 @@ fun AboutScreen() {
                     Text(
                         text = stringResource(R.string.credits),
                         style = MaterialTheme.typography.labelLarge,
-                        color = if (hasBlurBackground) Color.White else MaterialTheme.secondary濃(0.7f)
+                        color = if (hasBlurBackground) Color.White else MaterialTheme.secondaryAlpha(0.7f)
                     )
                     Text(
                         text = stringResource(R.string.desukia),
@@ -371,7 +331,7 @@ fun AboutScreen() {
                     Text(
                         text = stringResource(R.string.open_source_libraries),
                         style = MaterialTheme.typography.labelLarge,
-                        color = if (hasBlurBackground) Color.White else MaterialTheme.secondary濃(0.7f)
+                        color = if (hasBlurBackground) Color.White else MaterialTheme.secondaryAlpha(0.7f)
                     )
                     
                     // Coil
@@ -466,7 +426,7 @@ fun AboutScreen() {
 }
 
 @Composable
-fun MaterialTheme.secondary濃(alpha: Float): Color {
+fun MaterialTheme.secondaryAlpha(alpha: Float): Color {
     return colorScheme.secondary.copy(alpha = alpha)
 }
 
