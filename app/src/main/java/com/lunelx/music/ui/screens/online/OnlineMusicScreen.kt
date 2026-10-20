@@ -68,6 +68,15 @@ fun OnlineMusicScreen(
      * 与「全部」等页面的头部行为完全一致：收起时只剩列表。
      */
     showHeader: Boolean = true,
+    /**
+     * 当前打开的榜单（null = 停在榜单列表）。
+     *
+     * 状态由调用方（Lune）持有：系统返回键要在「榜单歌曲列表 → 榜单列表」之间退，
+     * 而 Activity 级的 BackHandler 比页面内部的注册得更晚、优先级更高，
+     * 所以把状态提上去、由父级注册返回处理才可靠。
+     */
+    openedBoard: LxDiscoverBoard? = null,
+    onOpenedBoardChange: (LxDiscoverBoard?) -> Unit = {},
 ) {
     val context = LocalContext.current
     val repo = remember { LxRepository.getInstance(context) }
@@ -80,16 +89,18 @@ fun OnlineMusicScreen(
     var boardsError by remember { mutableStateOf<String?>(null) }
     var reloadTick by remember { mutableIntStateOf(0) }
 
-    var openedBoard by remember { mutableStateOf<LxDiscoverBoard?>(null) }
     var songs by remember { mutableStateOf<List<Song>>(emptyList()) }
     var songsLoading by remember { mutableStateOf(false) }
+    // 榜单歌曲的重试计数：openedBoard 现在由父级持有，"先置空再设回" 不会触发重组，
+    // 所以重试必须靠一个独立的 tick。
+    var songsReloadTick by remember { mutableIntStateOf(0) }
 
     val onlineEnabled = repo.onlineEnabled
     val discoverSupported = com.lunelx.music.lx.discover.LxDiscover.isSupported(selectedSource)
 
     // 平台的「发现」榜单
     LaunchedEffect(selectedSource, reloadTick, onlineEnabled) {
-        openedBoard = null
+        onOpenedBoardChange(null)
         songs = emptyList()
         boardsError = null
         boards = emptyList()
@@ -103,7 +114,7 @@ fun OnlineMusicScreen(
     }
 
     // 打开某个榜 → 拉歌曲
-    LaunchedEffect(openedBoard) {
+    LaunchedEffect(openedBoard, songsReloadTick) {
         val board = openedBoard ?: return@LaunchedEffect
         songsLoading = true
         songs = emptyList()
@@ -167,7 +178,7 @@ fun OnlineMusicScreen(
                     .fillMaxWidth()
                     .padding(start = 8.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
             ) {
-                IconButton(onClick = { openedBoard = null }) {
+                IconButton(onClick = { onOpenedBoardChange(null) }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "返回榜单",
@@ -196,13 +207,7 @@ fun OnlineMusicScreen(
                 songs.isEmpty() -> EmptyHint(
                     text = "这个榜单没有取到歌曲\n可能是平台接口临时不可用",
                     secondaryColor = secondaryColor,
-                    onRetry = {
-                        val b = openedBoard
-                        if (b != null) {
-                            openedBoard = null
-                            openedBoard = b
-                        }
-                    },
+                    onRetry = { songsReloadTick++ },
                 )
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -264,7 +269,7 @@ fun OnlineMusicScreen(
                         board = item,
                         textColor = textColor,
                         secondaryColor = secondaryColor,
-                        onClick = { openedBoard = item },
+                        onClick = { onOpenedBoardChange(item) },
                     )
                 }
             }

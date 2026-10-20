@@ -1056,6 +1056,13 @@ fun MainScreen(
     }
 
     var showSearchScreen by remember { mutableStateOf(false) }
+    // 在线音乐里点开的榜单。状态放在这里而不是页面内部，是为了让系统返回键能先退出榜单列表
+    // （页面内部的 BackHandler 会先于 Activity 级的注册，优先级不够稳）。
+    var onlineBoard by remember { mutableStateOf<com.lunelx.music.lx.discover.LxDiscoverBoard?>(null) }
+    // 切到别的分区就把榜单状态复位，免得回来时"返回键"行为对不上界面
+    LaunchedEffect(selectedFolder) {
+        if (selectedFolder != "ONLINE") onlineBoard = null
+    }
 
     Box(
         modifier = Modifier
@@ -1405,6 +1412,9 @@ fun MainScreen(
                                 onOpenSearch = { showSearchScreen = true },
                                 // 平台标签行跟着顶栏的「分区标题」开关一起收放，与其它页一致
                                 showHeader = showSectionHeaders,
+                                // 榜单的展开状态提到父级，返回键才能先「回到榜单列表」
+                                openedBoard = onlineBoard,
+                                onOpenedBoardChange = { onlineBoard = it },
                             )
                         }
 
@@ -2808,6 +2818,11 @@ fun MainScreen(
         }
         context.startService(intent)
         (context as? Activity)?.finishAffinity()
+    }
+
+    // 在线音乐：榜单歌曲列表里按返回键，先回到榜单列表（放在最后注册 → 优先级最高）
+    BackHandler(enabled = onlineBoard != null) {
+        onlineBoard = null
     }
 
     // Search Screen Overlay
